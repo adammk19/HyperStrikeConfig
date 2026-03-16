@@ -5,13 +5,18 @@ export function useAppUpdater(): {
   updateVersion: string
   downloadProgress: number
   updateDownloaded: boolean
+  isDownloading: boolean
+  updateError: string | null
   checkForUpdate: () => Promise<void>
+  downloadUpdate: () => void
   installUpdate: () => void
 } {
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [updateVersion, setUpdateVersion] = useState('')
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [updateDownloaded, setUpdateDownloaded] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -32,6 +37,14 @@ export function useAppUpdater(): {
     unsubs.push(
       window.context.onAppUpdateDownloaded(() => {
         setUpdateDownloaded(true)
+        setIsDownloading(false)
+      })
+    )
+
+    unsubs.push(
+      window.context.onAppUpdateError((message) => {
+        setUpdateError(message)
+        setIsDownloading(false)
       })
     )
 
@@ -40,6 +53,13 @@ export function useAppUpdater(): {
 
   const checkForUpdate = useCallback(async () => {
     await window.context.checkForAppUpdate()
+  }, [])
+
+  const downloadUpdate = useCallback(() => {
+    setIsDownloading(true)
+    setUpdateError(null)
+    setDownloadProgress(0)
+    window.context.downloadAppUpdate()
   }, [])
 
   const installUpdate = useCallback(() => {
@@ -51,7 +71,10 @@ export function useAppUpdater(): {
     updateVersion,
     downloadProgress,
     updateDownloaded,
+    isDownloading,
+    updateError,
     checkForUpdate,
+    downloadUpdate,
     installUpdate
   }
 }

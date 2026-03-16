@@ -1,11 +1,12 @@
-import { net, app } from 'electron'
-import { join } from 'path'
+import { app, net } from 'electron'
 import { createWriteStream } from 'fs'
-import { pipeline } from 'stream/promises'
+import { join } from 'path'
 import { Readable } from 'stream'
+import { pipeline } from 'stream/promises'
 
 const GITHUB_OWNER = 'adammk19'
-const GITHUB_REPO = 'LeverlessFirmware'
+const GITHUB_REPO = 'HyperStrikeConfig'
+const FIRMWARE_TAG_PREFIX = 'fw-v'
 
 export interface FirmwareReleaseInfo {
   version: string
@@ -22,7 +23,7 @@ const CONTROLLER_FIRMWARE_MAP: Record<number, string> = {
 }
 
 export async function fetchLatestRelease(controllerType?: number): Promise<FirmwareReleaseInfo> {
-  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`
   const response = await net.fetch(url, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
@@ -34,7 +35,17 @@ export async function fetchLatestRelease(controllerType?: number): Promise<Firmw
     throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
   }
 
-  const release = await response.json()
+  const releases = await response.json()
+
+  // Find the latest release with a fw- tag prefix
+  const release = releases.find(
+    (r: { tag_name: string; draft: boolean; prerelease: boolean }) =>
+      r.tag_name.startsWith(FIRMWARE_TAG_PREFIX) && !r.draft && !r.prerelease
+  )
+
+  if (!release) {
+    throw new Error('No firmware release found')
+  }
 
   // Try to find controller-specific firmware first
   const controllerKey = controllerType ? CONTROLLER_FIRMWARE_MAP[controllerType] : null
@@ -48,9 +59,7 @@ export async function fetchLatestRelease(controllerType?: number): Promise<Firmw
 
   // Fallback to any .uf2 file (backward compat with single-firmware releases)
   if (!uf2Asset) {
-    uf2Asset = release.assets?.find(
-      (a: { name: string }) => a.name.endsWith('.uf2')
-    )
+    uf2Asset = release.assets?.find((a: { name: string }) => a.name.endsWith('.uf2'))
   }
 
   if (!uf2Asset) {
@@ -58,7 +67,7 @@ export async function fetchLatestRelease(controllerType?: number): Promise<Firmw
   }
 
   return {
-    version: release.tag_name?.replace(/^v/, '') ?? '0.0.0',
+    version: release.tag_name?.replace(/^fw-v/, '') ?? '0.0.0',
     downloadUrl: uf2Asset.browser_download_url,
     releaseNotes: release.body ?? '',
     publishedAt: release.published_at ?? ''
@@ -71,7 +80,10 @@ export async function downloadUF2(
 ): Promise<string> {
   // Validate URL points to GitHub
   const parsed = new URL(url)
-  if (!parsed.hostname.endsWith('github.com') && !parsed.hostname.endsWith('githubusercontent.com')) {
+  if (
+    !parsed.hostname.endsWith('github.com') &&
+    !parsed.hostname.endsWith('githubusercontent.com')
+  ) {
     throw new Error('UF2 download URL must be from GitHub')
   }
 

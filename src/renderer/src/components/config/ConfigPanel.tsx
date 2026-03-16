@@ -1,28 +1,41 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDeviceState } from '../../context/DeviceContext'
 import { useDeviceConfig } from '../../hooks/useDeviceConfig'
 import { ControllerType } from '../../types/device'
+import { CalibrationOverlay } from '../calibration/CalibrationOverlay'
+import { Button } from '../common/Button'
+import { FirmwarePanel } from '../firmware/FirmwarePanel'
 import { ActuationSlider } from './ActuationSlider'
 import { RapidTriggerSection } from './RapidTriggerSection'
 import { SaveResetBar } from './SaveResetBar'
-import { Button } from '../common/Button'
-import { CalibrationOverlay } from '../calibration/CalibrationOverlay'
-import { FirmwarePanel } from '../firmware/FirmwarePanel'
 
 const LABELS_12 = ['L', 'R', 'U', 'D', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8']
 const LABELS_14 = ['L', 'R', 'U', 'D', 'B1', 'B2', 'B3', 'B4', 'M1', 'M2', 'B5', 'B6', 'B7', 'B8']
 
 interface ConfigPanelProps {
   selectedButtons: Set<number>
+  requestedTab?: Tab | null
+  onTabChanged?: () => void
 }
 
 type Tab = 'config' | 'firmware'
 
-export function ConfigPanel({ selectedButtons }: ConfigPanelProps): React.JSX.Element | null {
+export function ConfigPanel({
+  selectedButtons,
+  requestedTab,
+  onTabChanged
+}: ConfigPanelProps): React.JSX.Element | null {
   const { pendingConfig, isDirty, deviceInfo } = useDeviceState()
   const { updateConfig, updateActuationPoints, saveConfig, resetToDefaults } = useDeviceConfig()
   const [showCalibration, setShowCalibration] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('config')
+
+  useEffect(() => {
+    if (requestedTab) {
+      setActiveTab(requestedTab)
+      onTabChanged?.()
+    }
+  }, [requestedTab, onTabChanged])
 
   if (!pendingConfig) return null
 
@@ -84,9 +97,7 @@ export function ConfigPanel({ selectedButtons }: ConfigPanelProps): React.JSX.El
               {/* Selected buttons indicator */}
               <div className="space-y-1">
                 <h4 className="text-sm font-medium text-text-primary">Selected Buttons</h4>
-                <p className="text-xs text-text-muted">
-                  {getSelectedLabel()}
-                </p>
+                <p className="text-xs text-text-muted">{getSelectedLabel()}</p>
               </div>
 
               {/* Actuation point */}
@@ -123,10 +134,7 @@ export function ConfigPanel({ selectedButtons }: ConfigPanelProps): React.JSX.El
         </div>
       </div>
 
-      <CalibrationOverlay
-        open={showCalibration}
-        onClose={() => setShowCalibration(false)}
-      />
+      <CalibrationOverlay open={showCalibration} onClose={() => setShowCalibration(false)} />
     </>
   )
 }

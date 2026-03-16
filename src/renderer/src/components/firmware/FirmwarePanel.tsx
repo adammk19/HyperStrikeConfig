@@ -1,30 +1,19 @@
 import { useState } from 'react'
 import { useDeviceState } from '../../context/DeviceContext'
-import { formatFirmwareVersion } from '../../types/device'
 import { useFirmwareUpdate } from '../../hooks/useFirmwareUpdate'
+import { formatFirmwareVersion } from '../../types/device'
 import { Button } from '../common/Button'
 import { UpdateProgressModal } from './UpdateProgressModal'
 
 export function FirmwarePanel(): React.JSX.Element {
   const { deviceInfo } = useDeviceState()
-  const {
-    latestRelease,
-    updateAvailable,
-    currentStep,
-    downloadProgress,
-    performUpdate,
-    manualFlashReset
-  } = useFirmwareUpdate()
+  const { latestRelease, updateAvailable, currentStep, downloadProgress, performUpdate } =
+    useFirmwareUpdate()
   const [showProgress, setShowProgress] = useState(false)
 
   const handleUpdate = async (): Promise<void> => {
     setShowProgress(true)
     await performUpdate()
-  }
-
-  const handleManualFlash = async (): Promise<void> => {
-    setShowProgress(true)
-    await manualFlashReset()
   }
 
   return (
@@ -70,18 +59,6 @@ export function FirmwarePanel(): React.JSX.Element {
         {!updateAvailable && latestRelease && (
           <p className="text-sm text-success">Firmware is up to date</p>
         )}
-
-        {/* Manual flash for legacy firmware */}
-        <div className="border-t border-surface-border pt-4 space-y-2">
-          <h5 className="text-xs font-medium text-text-secondary">Manual Flash</h5>
-          <p className="text-xs text-text-muted">
-            For controllers with outdated firmware that can't be updated over USB.
-            Hold the BOOT button on your controller while plugging it in, then click below.
-          </p>
-          <Button variant="secondary" onClick={handleManualFlash} size="sm">
-            Flash from BOOT Mode
-          </Button>
-        </div>
       </div>
 
       <UpdateProgressModal

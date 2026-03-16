@@ -1,20 +1,29 @@
-import { useState } from 'react'
-import { DeviceProvider, useDeviceState } from './context/DeviceContext'
-import { AppShell } from './components/layout/AppShell'
-import { Header } from './components/layout/Header'
-import { StatusBar } from './components/layout/StatusBar'
+import { useCallback, useState } from 'react'
+import { ConfigPanel } from './components/config/ConfigPanel'
 import { ConnectPrompt } from './components/connection/ConnectPrompt'
 import { ReconnectBanner } from './components/connection/ReconnectBanner'
 import { ControllerView } from './components/controller/ControllerView'
-import { ConfigPanel } from './components/config/ConfigPanel'
+import { AppShell } from './components/layout/AppShell'
+import { Header } from './components/layout/Header'
+import { StatusBar } from './components/layout/StatusBar'
+import { DeviceProvider, useDeviceState } from './context/DeviceContext'
 
 function AppContent(): React.JSX.Element {
   const { connectionState } = useDeviceState()
   const [selectedButtons, setSelectedButtons] = useState<Set<number>>(new Set())
+  const [requestedTab, setRequestedTab] = useState<'config' | 'firmware' | null>(null)
+
+  const handleFirmwareClick = useCallback(() => {
+    setRequestedTab('firmware')
+  }, [])
+
+  const handleTabChanged = useCallback(() => {
+    setRequestedTab(null)
+  }, [])
 
   return (
     <AppShell>
-      <Header />
+      <Header onFirmwareClick={handleFirmwareClick} />
 
       {connectionState === 'reconnecting' && <ReconnectBanner />}
 
@@ -23,7 +32,11 @@ function AppContent(): React.JSX.Element {
       ) : (
         <div className="flex flex-1 overflow-hidden">
           <ControllerView onSelectionChange={setSelectedButtons} />
-          <ConfigPanel selectedButtons={selectedButtons} />
+          <ConfigPanel
+            selectedButtons={selectedButtons}
+            requestedTab={requestedTab}
+            onTabChanged={handleTabChanged}
+          />
         </div>
       )}
 

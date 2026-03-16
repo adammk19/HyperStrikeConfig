@@ -1,9 +1,13 @@
 import { useDeviceState } from '../../context/DeviceContext'
-import { CONTROLLER_NAMES, formatFirmwareVersion } from '../../types/device'
 import { useTheme } from '../../hooks/useTheme'
+import { CONTROLLER_NAMES, formatFirmwareVersion } from '../../types/device'
 
-export function Header(): React.JSX.Element {
-  const { connectionState, deviceInfo } = useDeviceState()
+interface HeaderProps {
+  onFirmwareClick?: () => void
+}
+
+export function Header({ onFirmwareClick }: HeaderProps): React.JSX.Element {
+  const { connectionState, deviceInfo, firmwareUpdateAvailable } = useDeviceState()
   const { theme, toggleTheme } = useTheme()
 
   const statusColor = {
@@ -31,13 +35,36 @@ export function Header(): React.JSX.Element {
           </>
         )}
 
+        {firmwareUpdateAvailable && connectionState === 'connected' && (
+          <button
+            onClick={onFirmwareClick}
+            className="relative flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-warning hover:bg-surface-overlay transition-colors cursor-pointer"
+            title="Firmware update available"
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+            </span>
+            Update
+          </button>
+        )}
+
         <button
           onClick={toggleTheme}
           className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors cursor-pointer"
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {theme === 'dark' ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <circle cx="12" cy="12" r="5" />
               <line x1="12" y1="1" x2="12" y2="3" />
               <line x1="12" y1="21" x2="12" y2="23" />
@@ -49,7 +76,16 @@ export function Header(): React.JSX.Element {
               <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
             </svg>
           ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
             </svg>
           )}

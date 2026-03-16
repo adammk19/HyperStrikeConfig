@@ -7,11 +7,13 @@ interface ContextAPI {
   copyToBootDrive: (uf2Path: string, drivePath: string) => Promise<void>
   getAppVersion: () => Promise<string>
   checkForAppUpdate: () => Promise<void>
+  downloadAppUpdate: () => Promise<void>
   installAppUpdate: () => void
   onFirmwareDownloadProgress: (callback: (percent: number) => void) => () => void
   onAppUpdateAvailable: (callback: (version: string) => void) => () => void
   onAppUpdateProgress: (callback: (percent: number) => void) => () => void
   onAppUpdateDownloaded: (callback: () => void) => () => void
+  onAppUpdateError: (callback: (message: string) => void) => () => void
 }
 
 declare global {

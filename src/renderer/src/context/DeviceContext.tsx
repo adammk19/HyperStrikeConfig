@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, type ReactNode } from 'react'
-import type { ConnectionState, DeviceInfo } from '../types/device'
 import type { DeviceConfig } from '../types/config'
+import type { ConnectionState, DeviceInfo } from '../types/device'
 import type { FirmwareUpdateStep } from '../types/firmware'
 
 // State
@@ -13,6 +13,8 @@ export interface DeviceState {
   isDirty: boolean
   isCalibrating: boolean
   firmwareUpdateStep: FirmwareUpdateStep
+  firmwareUpdateAvailable: boolean
+  latestFirmwareVersion: string | null
   error: string | null
 }
 
@@ -25,6 +27,8 @@ const initialState: DeviceState = {
   isDirty: false,
   isCalibrating: false,
   firmwareUpdateStep: 'idle',
+  firmwareUpdateAvailable: false,
+  latestFirmwareVersion: null,
   error: null
 }
 
@@ -41,6 +45,7 @@ export type DeviceAction =
   | { type: 'CALIBRATION_START' }
   | { type: 'CALIBRATION_STOP' }
   | { type: 'FIRMWARE_UPDATE_STEP'; step: FirmwareUpdateStep }
+  | { type: 'FIRMWARE_UPDATE_INFO'; available: boolean; version: string | null }
   | { type: 'SET_ERROR'; error: string }
   | { type: 'CLEAR_ERROR' }
 
@@ -99,9 +104,15 @@ function deviceReducer(state: DeviceState, action: DeviceAction): DeviceState {
     case 'CALIBRATION_START':
       return { ...state, isCalibrating: true }
     case 'CALIBRATION_STOP':
-      return { ...state, isCalibrating: false }
+      return { ...state, isCalibrating: false, isDirty: true }
     case 'FIRMWARE_UPDATE_STEP':
       return { ...state, firmwareUpdateStep: action.step }
+    case 'FIRMWARE_UPDATE_INFO':
+      return {
+        ...state,
+        firmwareUpdateAvailable: action.available,
+        latestFirmwareVersion: action.version
+      }
     case 'SET_ERROR':
       return { ...state, error: action.error }
     case 'CLEAR_ERROR':

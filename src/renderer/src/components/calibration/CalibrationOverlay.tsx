@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Modal } from '../common/Modal'
-import { Button } from '../common/Button'
-import { CalibrationButtonStatus } from './CalibrationButtonStatus'
 import { useDeviceState } from '../../context/DeviceContext'
 import { useCalibration } from '../../hooks/useCalibration'
 import { useRealtimeData } from '../../hooks/useRealtimeData'
 import { ControllerType } from '../../types/device'
+import { Button } from '../common/Button'
+import { Modal } from '../common/Modal'
+import { CalibrationButtonStatus } from './CalibrationButtonStatus'
 
 // Labels vary by controller type: Mini/FE have 12 buttons (no M1/M2), Standard/Pro have 14
 const LABELS_12 = ['L', 'R', 'U', 'D', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8']
@@ -65,9 +65,8 @@ export function CalibrationOverlay({ open, onClose }: CalibrationOverlayProps): 
         <div className="bg-surface-overlay rounded-lg p-4 text-sm text-text-secondary">
           <p className="font-medium text-text-primary mb-1">Instructions:</p>
           <p>
-            Press each button fully down, then release it completely.
-            Repeat for all buttons you want to calibrate.
-            Click <strong>Finish</strong> when done.
+            Press each button fully down, then release it completely. Click <strong>Finish</strong>{' '}
+            when done.
           </p>
         </div>
 

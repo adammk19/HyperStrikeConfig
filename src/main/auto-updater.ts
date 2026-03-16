@@ -1,5 +1,5 @@
-import { autoUpdater } from 'electron-updater'
 import type { BrowserWindow } from 'electron'
+import { autoUpdater } from 'electron-updater'
 
 export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.autoDownload = false
@@ -20,6 +20,9 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.on('error', (error) => {
     mainWindow.webContents.send('app:update-error', error.message)
   })
+
+  // Auto-check for updates 5s after startup
+  setTimeout(() => checkForUpdates(), 5000)
 }
 
 export function checkForUpdates(): void {

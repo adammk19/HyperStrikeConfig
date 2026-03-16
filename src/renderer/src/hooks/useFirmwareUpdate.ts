@@ -1,12 +1,24 @@
-import { useCallback, useState, useEffect } from 'react'
-import { useDeviceState, useDeviceDispatch } from '../context/DeviceContext'
-import { formatFirmwareVersion } from '../types/device'
-import { compareVersions, type FirmwareReleaseInfo, type FirmwareUpdateStep } from '../types/firmware'
-import { CMD_ENTER_BOOTLOADER } from '../types/hid-protocol'
-import { sendCommandNoResponse, getConnectedDevice, openDevice, sendCommand } from '../services/hid-connection'
-import { CMD_GET_DEVICE_INFO, STATUS_OK } from '../types/hid-protocol'
+import { useCallback, useEffect, useState } from 'react'
+import { useDeviceDispatch, useDeviceState } from '../context/DeviceContext'
 import { deserializeConfig } from '../services/config-serializer'
-import { CMD_GET_CONFIG } from '../types/hid-protocol'
+import {
+  getConnectedDevice,
+  openDevice,
+  sendCommand,
+  sendCommandNoResponse
+} from '../services/hid-connection'
+import { type ControllerType, formatFirmwareVersion } from '../types/device'
+import {
+  compareVersions,
+  type FirmwareReleaseInfo,
+  type FirmwareUpdateStep
+} from '../types/firmware'
+import {
+  CMD_ENTER_BOOTLOADER,
+  CMD_GET_CONFIG,
+  CMD_GET_DEVICE_INFO,
+  STATUS_OK
+} from '../types/hid-protocol'
 
 const BOOT_DRIVE_POLL_INTERVAL = 2000
 const BOOT_DRIVE_MAX_ATTEMPTS = 30
@@ -22,6 +34,7 @@ export function useFirmwareUpdate(): {
   checkForUpdate: () => Promise<void>
   performUpdate: () => Promise<void>
   manualFlashReset: () => Promise<void>
+  manualFlashWithType: (controllerType: ControllerType) => Promise<void>
 } {
   const state = useDeviceState()
   const dispatch = useDeviceDispatch()
@@ -48,7 +61,9 @@ export function useFirmwareUpdate(): {
 
       if (state.deviceInfo) {
         const currentVersion = formatFirmwareVersion(state.deviceInfo)
-        setUpdateAvailable(compareVersions(release.version, currentVersion) > 0)
+        const hasUpdate = compareVersions(release.version, currentVersion) > 0
+        setUpdateAvailable(hasUpdate)
+        dispatch({ type: 'FIRMWARE_UPDATE_INFO', available: hasUpdate, version: release.version })
       }
       updateStep('idle')
     } catch (err) {
@@ -184,6 +199,41 @@ export function useFirmwareUpdate(): {
     }
   }, [latestRelease, dispatch, updateStep, checkForUpdate])
 
+  const manualFlashWithType = useCallback(
+    async (controllerType: ControllerType) => {
+      try {
+        // Fetch firmware for the selected controller type
+        updateStep('checking')
+        const release = await window.context.fetchLatestFirmwareRelease(controllerType)
+
+        // Download UF2
+        updateStep('downloading')
+        setDownloadProgress(0)
+        const uf2Path = await window.context.downloadUF2(release.downloadUrl)
+
+        // Wait for user to put controller in BOOT mode
+        updateStep('waiting-for-boot-drive')
+        const drivePath = await pollForBootDrive()
+        if (!drivePath) {
+          throw new Error('Timed out waiting for controller in update mode')
+        }
+
+        // Copy firmware
+        updateStep('copying')
+        await window.context.copyToBootDrive(uf2Path, drivePath)
+
+        updateStep('complete')
+      } catch (err) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: err instanceof Error ? err.message : 'Manual flash failed'
+        })
+        updateStep('error')
+      }
+    },
+    [dispatch, updateStep]
+  )
+
   return {
     latestRelease,
     updateAvailable,
@@ -191,7 +241,8 @@ export function useFirmwareUpdate(): {
     downloadProgress,
     checkForUpdate,
     performUpdate,
-    manualFlashReset
+    manualFlashReset,
+    manualFlashWithType
   }
 }
 

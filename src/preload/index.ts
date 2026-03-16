@@ -16,6 +16,7 @@ const context = {
   // App operations
   getAppVersion: () => ipcRenderer.invoke('app:get-version'),
   checkForAppUpdate: () => ipcRenderer.invoke('app:check-update'),
+  downloadAppUpdate: () => ipcRenderer.invoke('app:download-update'),
   installAppUpdate: () => ipcRenderer.invoke('app:install-update'),
 
   // Event subscriptions (main -> renderer)
@@ -45,6 +46,13 @@ const context = {
     ipcRenderer.on('app:update-downloaded', handler)
     return () => {
       ipcRenderer.removeListener('app:update-downloaded', handler)
+    }
+  },
+  onAppUpdateError: (callback: (message: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, message: string): void => callback(message)
+    ipcRenderer.on('app:update-error', handler)
+    return () => {
+      ipcRenderer.removeListener('app:update-error', handler)
     }
   }
 }

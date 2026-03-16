@@ -1,12 +1,13 @@
-import { Modal } from '../common/Modal'
-import { Button } from '../common/Button'
 import type { FirmwareUpdateStep } from '../../types/firmware'
+import { Button } from '../common/Button'
+import { Modal } from '../common/Modal'
 
 interface UpdateProgressModalProps {
   open: boolean
   step: FirmwareUpdateStep
   downloadProgress: number
   onClose: () => void
+  showConnectPrompt?: boolean
 }
 
 const STEP_LABELS: Record<FirmwareUpdateStep, string> = {
@@ -34,7 +35,8 @@ export function UpdateProgressModal({
   open,
   step,
   downloadProgress,
-  onClose
+  onClose,
+  showConnectPrompt = false
 }: UpdateProgressModalProps): React.JSX.Element {
   const isComplete = step === 'complete'
   const isError = step === 'error'
@@ -110,6 +112,12 @@ export function UpdateProgressModal({
         {isComplete && (
           <div className="text-center space-y-3">
             <p className="text-success font-medium">Firmware updated successfully!</p>
+            {showConnectPrompt && (
+              <p className="text-sm text-text-secondary">
+                Your controller will restart automatically. Click "Connect Controller" to get
+                started.
+              </p>
+            )}
             <Button onClick={onClose}>Done</Button>
           </div>
         )}
