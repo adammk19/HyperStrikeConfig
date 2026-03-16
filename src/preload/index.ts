@@ -1,22 +1,52 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron'
 
-// Custom APIs for renderer
-const api = {}
-
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
-  }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+if (!process.contextIsolated) {
+  throw new Error('Context isolation must be enabled for security reasons.')
 }
+
+const context = {
+  // Firmware operations
+  fetchLatestFirmwareRelease: (controllerType?: number) =>
+    ipcRenderer.invoke('firmware:fetch-latest-release', controllerType),
+  downloadUF2: (url: string) => ipcRenderer.invoke('firmware:download-uf2', url),
+  detectBootDrive: () => ipcRenderer.invoke('firmware:detect-boot-drive'),
+  copyToBootDrive: (uf2Path: string, drivePath: string) =>
+    ipcRenderer.invoke('firmware:copy-to-boot-drive', uf2Path, drivePath),
+
+  // App operations
+  getAppVersion: () => ipcRenderer.invoke('app:get-version'),
+  checkForAppUpdate: () => ipcRenderer.invoke('app:check-update'),
+  installAppUpdate: () => ipcRenderer.invoke('app:install-update'),
+
+  // Event subscriptions (main -> renderer)
+  onFirmwareDownloadProgress: (callback: (percent: number) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, percent: number): void => callback(percent)
+    ipcRenderer.on('firmware:download-progress', handler)
+    return () => {
+      ipcRenderer.removeListener('firmware:download-progress', handler)
+    }
+  },
+  onAppUpdateAvailable: (callback: (version: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, version: string): void => callback(version)
+    ipcRenderer.on('app:update-available', handler)
+    return () => {
+      ipcRenderer.removeListener('app:update-available', handler)
+    }
+  },
+  onAppUpdateProgress: (callback: (percent: number) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, percent: number): void => callback(percent)
+    ipcRenderer.on('app:update-progress', handler)
+    return () => {
+      ipcRenderer.removeListener('app:update-progress', handler)
+    }
+  },
+  onAppUpdateDownloaded: (callback: () => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('app:update-downloaded', handler)
+    return () => {
+      ipcRenderer.removeListener('app:update-downloaded', handler)
+    }
+  }
+}
+
+contextBridge.exposeInMainWorld('context', context)
