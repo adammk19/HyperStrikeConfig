@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDeviceDispatch, useDeviceState } from '../context/DeviceContext'
 import { deserializeConfig } from '../services/config-serializer'
 import {
@@ -31,8 +31,10 @@ export function useFirmwareUpdate(): {
   updateAvailable: boolean
   currentStep: FirmwareUpdateStep
   downloadProgress: number
+  isCancelling: boolean
   checkForUpdate: () => Promise<void>
   performUpdate: () => Promise<void>
+  cancelUpdate: () => void
   manualFlashReset: () => Promise<void>
   manualFlashWithType: (controllerType: ControllerType) => Promise<void>
 } {
@@ -42,6 +44,8 @@ export function useFirmwareUpdate(): {
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [currentStep, setCurrentStep] = useState<FirmwareUpdateStep>('idle')
   const [downloadProgress, setDownloadProgress] = useState(0)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const updateStep = useCallback(
     (step: FirmwareUpdateStep) => {
@@ -50,6 +54,13 @@ export function useFirmwareUpdate(): {
     },
     [dispatch]
   )
+
+  const cancelUpdate = useCallback(() => {
+    setIsCancelling(true)
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+  }, [])
 
   const checkForUpdate = useCallback(async () => {
     try {
@@ -93,15 +104,21 @@ export function useFirmwareUpdate(): {
   const performUpdate = useCallback(async () => {
     if (!latestRelease || !state.device) return
 
+    setIsCancelling(false)
+    abortControllerRef.current = new AbortController()
+
     try {
       // Step 1: Download UF2
       updateStep('downloading')
       setDownloadProgress(0)
+      if (isCancelling) throw new Error('Update cancelled')
       const uf2Path = await window.context.downloadUF2(latestRelease.downloadUrl)
 
       // Step 2: Enter bootloader
       updateStep('rebooting')
-      // Suppress reconnect logic since we expect a disconnect
+      if (isCancelling)
+        throw new Error('Update cancelled')
+        // Suppress reconnect logic since we expect a disconnect
       ;(window as unknown as { __suppressReconnect: (v: boolean) => void }).__suppressReconnect(
         true
       )
@@ -109,18 +126,21 @@ export function useFirmwareUpdate(): {
 
       // Step 3: Wait for boot drive
       updateStep('waiting-for-boot-drive')
-      const drivePath = await pollForBootDrive()
+      if (isCancelling) throw new Error('Update cancelled')
+      const drivePath = await pollForBootDrive(abortControllerRef.current.signal)
       if (!drivePath) {
         throw new Error('Timed out waiting for controller to enter update mode')
       }
 
       // Step 4: Copy UF2
       updateStep('copying')
+      if (isCancelling) throw new Error('Update cancelled')
       await window.context.copyToBootDrive(uf2Path, drivePath)
 
       // Step 5: Wait for reconnect
       updateStep('waiting-for-reconnect')
-      const device = await pollForReconnect()
+      if (isCancelling) throw new Error('Update cancelled')
+      const device = await pollForReconnect(abortControllerRef.current.signal)
       if (!device) {
         throw new Error('Timed out waiting for controller to restart')
       }
@@ -155,83 +175,112 @@ export function useFirmwareUpdate(): {
       ;(window as unknown as { __suppressReconnect: (v: boolean) => void }).__suppressReconnect(
         false
       )
-      dispatch({
-        type: 'SET_ERROR',
-        error: err instanceof Error ? err.message : 'Firmware update failed'
-      })
+      const message = err instanceof Error ? err.message : 'Firmware update failed'
+      if (!message.includes('cancelled')) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: message
+        })
+      }
       updateStep('error')
+    } finally {
+      setIsCancelling(false)
     }
-  }, [latestRelease, state.device, dispatch, updateStep])
+  }, [latestRelease, state.device, dispatch, updateStep, isCancelling])
 
   const manualFlashReset = useCallback(async () => {
     if (!latestRelease) {
       await checkForUpdate()
     }
 
+    setIsCancelling(false)
+    abortControllerRef.current = new AbortController()
+
     try {
       // For legacy firmware: user manually holds BOOT + plugs in
       // We just poll for the boot drive
       updateStep('waiting-for-boot-drive')
-      const drivePath = await pollForBootDrive()
+      if (isCancelling) throw new Error('Update cancelled')
+      const drivePath = await pollForBootDrive(abortControllerRef.current.signal)
       if (!drivePath) {
         throw new Error('Timed out waiting for controller in update mode')
       }
 
       if (latestRelease) {
         updateStep('downloading')
+        if (isCancelling) throw new Error('Update cancelled')
         setDownloadProgress(0)
         const uf2Path = await window.context.downloadUF2(latestRelease.downloadUrl)
 
         updateStep('copying')
+        if (isCancelling) throw new Error('Update cancelled')
         await window.context.copyToBootDrive(uf2Path, drivePath)
 
         updateStep('waiting-for-reconnect')
-        await pollForReconnect()
+        if (isCancelling) throw new Error('Update cancelled')
+        await pollForReconnect(abortControllerRef.current.signal)
       }
 
       updateStep('complete')
     } catch (err) {
-      dispatch({
-        type: 'SET_ERROR',
-        error: err instanceof Error ? err.message : 'Manual flash failed'
-      })
+      const message = err instanceof Error ? err.message : 'Manual flash failed'
+      if (!message.includes('cancelled')) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: message
+        })
+      }
       updateStep('error')
+    } finally {
+      setIsCancelling(false)
     }
-  }, [latestRelease, dispatch, updateStep, checkForUpdate])
+  }, [latestRelease, dispatch, updateStep, checkForUpdate, isCancelling])
 
   const manualFlashWithType = useCallback(
     async (controllerType: ControllerType) => {
+      setIsCancelling(false)
+      abortControllerRef.current = new AbortController()
+
       try {
         // Fetch firmware for the selected controller type
         updateStep('checking')
+        if (isCancelling) throw new Error('Update cancelled')
         const release = await window.context.fetchLatestFirmwareRelease(controllerType)
 
         // Download UF2
         updateStep('downloading')
+        if (isCancelling) throw new Error('Update cancelled')
         setDownloadProgress(0)
         const uf2Path = await window.context.downloadUF2(release.downloadUrl)
 
         // Wait for user to put controller in BOOT mode
         updateStep('waiting-for-boot-drive')
-        const drivePath = await pollForBootDrive()
+        if (isCancelling) throw new Error('Update cancelled')
+        const drivePath = await pollForBootDrive(abortControllerRef.current.signal)
         if (!drivePath) {
           throw new Error('Timed out waiting for controller in update mode')
         }
 
         // Copy firmware
         updateStep('copying')
+        if (isCancelling) throw new Error('Update cancelled')
         await window.context.copyToBootDrive(uf2Path, drivePath)
 
         updateStep('complete')
       } catch (err) {
-        dispatch({
-          type: 'SET_ERROR',
-          error: err instanceof Error ? err.message : 'Manual flash failed'
-        })
+        const message = err instanceof Error ? err.message : 'Manual flash failed'
+        if (!message.includes('cancelled')) {
+          dispatch({
+            type: 'SET_ERROR',
+            error: message
+          })
+        }
         updateStep('error')
+      } finally {
+        setIsCancelling(false)
       }
     },
-    [dispatch, updateStep]
+    [dispatch, updateStep, isCancelling]
   )
 
   return {
@@ -239,17 +288,20 @@ export function useFirmwareUpdate(): {
     updateAvailable,
     currentStep,
     downloadProgress,
+    isCancelling,
     checkForUpdate,
     performUpdate,
+    cancelUpdate,
     manualFlashReset,
     manualFlashWithType
   }
 }
 
-async function pollForBootDrive(): Promise<string | null> {
+async function pollForBootDrive(signal?: AbortSignal): Promise<string | null> {
   // Wait for RP2040 to reboot into bootloader and Windows to mount the drive
   await new Promise((r) => setTimeout(r, BOOT_DRIVE_INITIAL_DELAY))
   for (let i = 0; i < BOOT_DRIVE_MAX_ATTEMPTS; i++) {
+    if (signal?.aborted) return null
     const drive = await window.context.detectBootDrive()
     if (drive) return drive
     await new Promise((r) => setTimeout(r, BOOT_DRIVE_POLL_INTERVAL))
@@ -257,8 +309,9 @@ async function pollForBootDrive(): Promise<string | null> {
   return null
 }
 
-async function pollForReconnect(): Promise<HIDDevice | null> {
+async function pollForReconnect(signal?: AbortSignal): Promise<HIDDevice | null> {
   for (let i = 0; i < RECONNECT_MAX_ATTEMPTS; i++) {
+    if (signal?.aborted) return null
     const device = await getConnectedDevice()
     if (device) return device
     await new Promise((r) => setTimeout(r, RECONNECT_POLL_INTERVAL))

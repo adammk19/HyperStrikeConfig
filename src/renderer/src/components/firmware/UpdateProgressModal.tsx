@@ -7,6 +7,8 @@ interface UpdateProgressModalProps {
   step: FirmwareUpdateStep
   downloadProgress: number
   onClose: () => void
+  onCancel?: () => void
+  isCancelling?: boolean
   showConnectPrompt?: boolean
 }
 
@@ -36,10 +38,13 @@ export function UpdateProgressModal({
   step,
   downloadProgress,
   onClose,
+  onCancel,
+  isCancelling = false,
   showConnectPrompt = false
 }: UpdateProgressModalProps): React.JSX.Element {
   const isComplete = step === 'complete'
   const isError = step === 'error'
+  const isInProgress = step !== 'idle' && !isComplete && !isError
   const currentStepIndex = STEPS_ORDER.indexOf(step)
 
   return (
@@ -127,6 +132,14 @@ export function UpdateProgressModal({
             <p className="text-danger">Something went wrong during the update.</p>
             <Button onClick={onClose} variant="secondary">
               Close
+            </Button>
+          </div>
+        )}
+
+        {isInProgress && onCancel && (
+          <div className="flex justify-center">
+            <Button onClick={onCancel} variant="secondary" disabled={isCancelling}>
+              {isCancelling ? 'Cancelling...' : 'Cancel Update'}
             </Button>
           </div>
         )}

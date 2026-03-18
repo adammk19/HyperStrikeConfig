@@ -16,7 +16,8 @@ const CONTROLLER_OPTIONS = [
 export function ConnectPrompt(): React.JSX.Element {
   const { connect } = useDeviceConnection()
   const { connectionState, error } = useDeviceState()
-  const { currentStep, downloadProgress, manualFlashWithType } = useFirmwareUpdate()
+  const { currentStep, downloadProgress, isCancelling, manualFlashWithType, cancelUpdate } =
+    useFirmwareUpdate()
   const [selectedType, setSelectedType] = useState<ControllerType>(ControllerType.Standard)
   const [showProgress, setShowProgress] = useState(false)
 
@@ -82,6 +83,8 @@ export function ConnectPrompt(): React.JSX.Element {
         step={currentStep}
         downloadProgress={downloadProgress}
         onClose={() => setShowProgress(false)}
+        onCancel={cancelUpdate}
+        isCancelling={isCancelling}
         showConnectPrompt
       />
     </div>

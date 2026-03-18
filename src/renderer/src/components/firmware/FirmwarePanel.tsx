@@ -7,8 +7,15 @@ import { UpdateProgressModal } from './UpdateProgressModal'
 
 export function FirmwarePanel(): React.JSX.Element {
   const { deviceInfo } = useDeviceState()
-  const { latestRelease, updateAvailable, currentStep, downloadProgress, performUpdate } =
-    useFirmwareUpdate()
+  const {
+    latestRelease,
+    updateAvailable,
+    currentStep,
+    downloadProgress,
+    isCancelling,
+    performUpdate,
+    cancelUpdate
+  } = useFirmwareUpdate()
   const [showProgress, setShowProgress] = useState(false)
 
   const handleUpdate = async (): Promise<void> => {
@@ -66,6 +73,8 @@ export function FirmwarePanel(): React.JSX.Element {
         step={currentStep}
         downloadProgress={downloadProgress}
         onClose={() => setShowProgress(false)}
+        onCancel={cancelUpdate}
+        isCancelling={isCancelling}
       />
     </>
   )
